@@ -15,6 +15,7 @@ app.use(express.json());
 
 // Mount Routes
 app.use('/api/auth', require('./routes/authRoutes'));
+app.use('/api/trips', require('./routes/tripRoutes'));
 
 // Health Check
 app.get('/health', (req, res) => res.status(200).json({ status: 'API is running' }));
