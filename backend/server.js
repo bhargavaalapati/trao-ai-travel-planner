@@ -12,7 +12,7 @@ connectDB();
 // Core Middleware
 const allowedOrigins = [
     'http://localhost:3000',
-    'https://trao-ai-travel-planner-eight.vercel.app/'
+    'https://trao-ai-travel-planner-eight.vercel.app'
 ];
 
 app.use(cors({
