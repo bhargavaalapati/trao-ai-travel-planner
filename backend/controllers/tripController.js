@@ -137,7 +137,7 @@ exports.updateTrip = async (req, res) => {
         const updatedTrip = await Trip.findOneAndUpdate(
             { _id: req.params.id, userId: req.user.id },
             req.body,
-            { new: true, runValidators: true } // Return the updated document
+            { returnDocument: 'after', runValidators: true }
         );
 
         if (!updatedTrip) {
