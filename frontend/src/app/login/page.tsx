@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { fetchWithAuth } from '@/utils/api';
 import { AuthResponse } from '@/types';
@@ -11,6 +11,13 @@ export default function LoginPage() {
     const [password, setPassword] = useState('');
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(false);
+
+    useEffect(() => {
+        const token = localStorage.getItem('token');
+        if (token) {
+            router.push('/dashboard');
+        }
+    }, [router]);
 
     const handleLogin = async (e: React.FormEvent) => {
         e.preventDefault();

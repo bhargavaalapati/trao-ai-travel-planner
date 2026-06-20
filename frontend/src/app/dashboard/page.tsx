@@ -5,7 +5,6 @@ import { useRouter } from 'next/navigation';
 import { fetchWithAuth } from '@/utils/api';
 import CreateTripModal from '@/components/CreateTripModal';
 
-// Defining our strict TypeScript interfaces based on our Mongoose schema
 interface Activity {
     _id?: string;
     title: string;
@@ -49,15 +48,18 @@ export default function DashboardPage() {
     const [loading, setLoading] = useState(true);
     const [isModalOpen, setIsModalOpen] = useState(false);
 
+    // Editable UI States
+    const [modifyingDay, setModifyingDay] = useState<number | null>(null);
+    const [editPrompt, setEditPrompt] = useState('');
+    const [isEditing, setIsEditing] = useState(false);
+
     useEffect(() => {
-        // 1. Enclave Check: Kick out unauthenticated users
         const token = localStorage.getItem('token');
         if (!token) {
             router.push('/login');
             return;
         }
 
-        // 2. Fetch User-Isolated Trips
         const loadTrips = async () => {
             try {
                 const data = await fetchWithAuth('/api/trips');
@@ -65,7 +67,6 @@ export default function DashboardPage() {
                 if (data.length > 0) setSelectedTrip(data[0]);
             } catch (err) {
                 console.error('Failed to load trips:', err);
-                // If token is expired/invalid, clear it and force re-login
                 localStorage.removeItem('token');
                 router.push('/login');
             } finally {
@@ -78,25 +79,20 @@ export default function DashboardPage() {
 
     const handleLogout = () => {
         localStorage.removeItem('token');
-        router.push('/login');
+        router.push('/');
     };
 
-    // Add this inside the DashboardPage component
     const togglePackingItem = async (itemId: string) => {
         if (!selectedTrip) return;
 
-        // 1. Optimistic UI Update for instant feedback
         const updatedPackingList = selectedTrip.packingList.map(item =>
             item._id === itemId ? { ...item, isPacked: !item.isPacked } : item
         );
 
         const updatedTrip = { ...selectedTrip, packingList: updatedPackingList };
         setSelectedTrip(updatedTrip);
-
-        // Update the main trips array so state stays in sync if they switch trips
         setTrips(trips.map(t => t._id === updatedTrip._id ? updatedTrip : t));
 
-        // 2. Fire the PUT request to the backend
         try {
             await fetchWithAuth(`/api/trips/${selectedTrip._id}`, {
                 method: 'PUT',
@@ -104,23 +100,76 @@ export default function DashboardPage() {
             });
         } catch (error) {
             console.error("Failed to update packing list:", error);
-            // If it fails, we would ideally revert the state here
         }
+    };
+
+    const deleteActivity = async (dayNumber: number, activityIndex: number) => {
+        if (!selectedTrip) return;
+
+        const updatedItinerary = selectedTrip.itinerary.map(day => {
+            if (day.dayNumber === dayNumber) {
+                const filteredActivities = day.activities.filter((_, idx) => idx !== activityIndex);
+                return { ...day, activities: filteredActivities };
+            }
+            return day;
+        });
+
+        const updatedTrip = { ...selectedTrip, itinerary: updatedItinerary };
+        setSelectedTrip(updatedTrip);
+        setTrips(trips.map(t => t._id === updatedTrip._id ? updatedTrip : t));
+
+        try {
+            await fetchWithAuth(`/api/trips/${selectedTrip._id}`, {
+                method: 'PUT',
+                body: JSON.stringify({ itinerary: updatedItinerary }),
+            });
+        } catch (err) {
+            console.error("Failed to delete activity:", err);
+        }
+    };
+
+    const handleRegenerateDay = async (dayNumber: number) => {
+        if (!editPrompt.trim()) return;
+        setIsEditing(true);
+
+        // Note: For a production app, you would hit a specific /api/trips/:id/regenerate endpoint here
+        // passing the `editPrompt` to Gemini to rewrite this specific array index.
+        console.log(`Sending to AI: Regenerate Day ${dayNumber} with context: ${editPrompt}`);
+
+        setTimeout(() => {
+            setIsEditing(false);
+            setModifyingDay(null);
+            setEditPrompt('');
+            alert("AI Regeneration prompt captured! (Requires backend regeneration endpoint mapping)");
+        }, 1500);
     };
 
     if (loading) {
         return (
-            <div className="min-h-screen bg-slate-950 flex justify-center items-center">
-                <div className="animate-pulse text-indigo-400 font-bold text-xl">
-                    Decrypting user enclave...
-                </div>
+            <div className="min-h-screen bg-slate-950 text-slate-100 p-6 animate-pulse">
+                <header className="max-w-7xl mx-auto flex justify-between items-center border-b border-slate-800 pb-5 mb-8">
+                    <div className="space-y-2">
+                        <div className="h-8 w-48 bg-slate-800 rounded-lg"></div>
+                        <div className="h-4 w-32 bg-slate-800 rounded"></div>
+                    </div>
+                    <div className="h-10 w-24 bg-slate-800 rounded-lg"></div>
+                </header>
+
+                <main className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-3 gap-8">
+                    <div className="space-y-6">
+                        <div className="h-48 bg-slate-900 border border-slate-800 rounded-2xl p-6"></div>
+                        <div className="h-32 bg-slate-900 border border-slate-800 rounded-2xl p-6"></div>
+                    </div>
+                    <div className="lg:col-span-2 space-y-6">
+                        <div className="h-96 bg-slate-900 border border-slate-800 rounded-2xl p-6"></div>
+                    </div>
+                </main>
             </div>
         );
     }
 
     return (
         <div className="min-h-screen bg-slate-950 text-slate-100 p-6">
-            {/* Header */}
             <header className="max-w-7xl mx-auto flex justify-between items-center border-b border-slate-800 pb-5 mb-8">
                 <div>
                     <h1 className="text-3xl font-extrabold tracking-tight bg-gradient-to-r from-blue-400 to-indigo-500 bg-clip-text text-transparent">
@@ -137,7 +186,6 @@ export default function DashboardPage() {
             </header>
 
             <main className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-3 gap-8">
-                {/* Left Column: Trip Selector */}
                 <div className="space-y-6">
                     <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6">
                         <div className="flex justify-between items-center mb-4">
@@ -171,7 +219,6 @@ export default function DashboardPage() {
                         )}
                     </div>
 
-                    {/* Core Budgets Display */}
                     {selectedTrip && (
                         <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6">
                             <h2 className="text-lg font-bold mb-4">Estimated Budget</h2>
@@ -197,11 +244,10 @@ export default function DashboardPage() {
                     )}
                 </div>
 
-                {/* Right Column: Itinerary Board & AI Packing List */}
                 <div className="lg:col-span-2 space-y-6">
                     {selectedTrip ? (
                         <>
-                            {/* Timeline */}
+                            {/* Editable Timeline */}
                             <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl">
                                 <h2 className="text-2xl font-bold mb-6 text-white border-b border-slate-800 pb-3">
                                     Day-by-Day Timeline: {selectedTrip.destination}
@@ -211,15 +257,54 @@ export default function DashboardPage() {
                                     {selectedTrip.itinerary.map((day) => (
                                         <div key={day.dayNumber} className="border-l-2 border-indigo-500 pl-6 relative">
                                             <div className="absolute -left-[9px] top-1 w-4 h-4 bg-indigo-500 rounded-full border-4 border-slate-900" />
-                                            <h3 className="text-lg font-bold text-slate-200 mb-3">Day {day.dayNumber}</h3>
+
+                                            <div className="flex justify-between items-center mb-3">
+                                                <h3 className="text-lg font-bold text-slate-200">Day {day.dayNumber}</h3>
+                                                <button
+                                                    onClick={() => setModifyingDay(modifyingDay === day.dayNumber ? null : day.dayNumber)}
+                                                    className="text-xs text-indigo-400 hover:text-indigo-300 transition"
+                                                >
+                                                    {modifyingDay === day.dayNumber ? 'Cancel Edit' : '⚡ Modify Day'}
+                                                </button>
+                                            </div>
+
+                                            {/* AI Modification Prompt */}
+                                            {modifyingDay === day.dayNumber && (
+                                                <div className="bg-slate-950 border border-slate-800 p-3 rounded-xl mb-4 space-y-2">
+                                                    <input
+                                                        type="text"
+                                                        placeholder="e.g., Replace shopping with a hiking trail..."
+                                                        value={editPrompt}
+                                                        onChange={(e) => setEditPrompt(e.target.value)}
+                                                        className="w-full bg-slate-900 border border-slate-700 rounded px-3 py-2 text-xs text-white outline-none focus:border-indigo-500"
+                                                    />
+                                                    <button
+                                                        onClick={() => handleRegenerateDay(day.dayNumber)}
+                                                        disabled={isEditing}
+                                                        className="bg-indigo-600 text-white text-[11px] px-3 py-1.5 rounded hover:bg-indigo-500 transition disabled:opacity-50"
+                                                    >
+                                                        {isEditing ? 'Refactoring Timeline...' : 'Ask AI to Rewrite'}
+                                                    </button>
+                                                </div>
+                                            )}
+
                                             <div className="space-y-3">
                                                 {day.activities.map((act, index) => (
-                                                    <div key={index} className="bg-slate-800 p-4 rounded-lg border border-slate-700 hover:border-indigo-500/50 transition">
+                                                    <div key={index} className="bg-slate-800 p-4 rounded-lg border border-slate-700 group relative hover:border-indigo-500/50 transition">
                                                         <div className="flex justify-between items-start">
                                                             <span className="font-semibold text-white">{act.title}</span>
-                                                            <span className="text-xs bg-indigo-900/40 text-indigo-300 px-2 py-0.5 rounded-full whitespace-nowrap ml-2">
-                                                                {act.timeOfDay}
-                                                            </span>
+                                                            <div className="flex items-center gap-2">
+                                                                <span className="text-xs bg-indigo-900/40 text-indigo-300 px-2 py-0.5 rounded-full whitespace-nowrap ml-2">
+                                                                    {act.timeOfDay}
+                                                                </span>
+                                                                <button
+                                                                    onClick={() => deleteActivity(day.dayNumber, index)}
+                                                                    className="text-slate-500 hover:text-red-400 opacity-0 group-hover:opacity-100 transition text-xs"
+                                                                    title="Delete Activity"
+                                                                >
+                                                                    🗑️
+                                                                </button>
+                                                            </div>
                                                         </div>
                                                         <p className="text-sm text-slate-400 mt-2">{act.description}</p>
                                                         {act.estimatedCostUSD > 0 && (
@@ -233,7 +318,7 @@ export default function DashboardPage() {
                                 </div>
                             </div>
 
-                            {/* Creative Feature: Weather-Aware Packing Checklist */}
+                            {/* Packing Checklist */}
                             <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl">
                                 <h3 className="text-xl font-bold mb-1 text-white flex items-center gap-2">
                                     <span>⛈️</span> AI Weather-Aware Packing Assistant
@@ -243,7 +328,6 @@ export default function DashboardPage() {
                                 </p>
 
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                                    {/* Replace the existing packing item map with this: */}
                                     {selectedTrip.packingList?.map((item) => (
                                         <div
                                             key={item._id}
@@ -279,8 +363,8 @@ export default function DashboardPage() {
                 isOpen={isModalOpen}
                 onClose={() => setIsModalOpen(false)}
                 onTripCreated={(newTrip) => {
-                    setTrips([newTrip, ...trips]); // Add to the top of the list
-                    setSelectedTrip(newTrip);      // Auto-select the newly generated trip
+                    setTrips([newTrip, ...trips]);
+                    setSelectedTrip(newTrip);
                 }}
             />
         </div>
