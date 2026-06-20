@@ -100,3 +100,70 @@ exports.generateTrip = async (req, res) => {
         res.status(500).json({ message: "Failed to generate AI itinerary. Please try again." });
     }
 };
+
+// @desc    Get all trips for the authenticated user
+// @route   GET /api/trips
+exports.getUserTrips = async (req, res) => {
+    try {
+        // Strict isolation: Only find trips matching the token's user ID
+        const trips = await Trip.find({ userId: req.user.id }).sort({ createdAt: -1 });
+        res.status(200).json(trips);
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ message: 'Server Error fetching trips' });
+    }
+};
+
+// @desc    Get a single trip by ID
+// @route   GET /api/trips/:id
+exports.getTripById = async (req, res) => {
+    try {
+        const trip = await Trip.findOne({ _id: req.params.id, userId: req.user.id });
+        if (!trip) {
+            return res.status(404).json({ message: 'Trip not found or unauthorized' });
+        }
+        res.status(200).json(trip);
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ message: 'Server Error fetching trip details' });
+    }
+};
+
+// @desc    Update a trip (Edit itinerary, toggle packing list)
+// @route   PUT /api/trips/:id
+exports.updateTrip = async (req, res) => {
+    try {
+        // findOneAndUpdate ensures we check the ID *and* the Owner simultaneously
+        const updatedTrip = await Trip.findOneAndUpdate(
+            { _id: req.params.id, userId: req.user.id },
+            req.body,
+            { new: true, runValidators: true } // Return the updated document
+        );
+
+        if (!updatedTrip) {
+            return res.status(404).json({ message: 'Trip not found or unauthorized' });
+        }
+
+        res.status(200).json(updatedTrip);
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ message: 'Server Error updating trip' });
+    }
+};
+
+// @desc    Delete a trip
+// @route   DELETE /api/trips/:id
+exports.deleteTrip = async (req, res) => {
+    try {
+        const deletedTrip = await Trip.findOneAndDelete({ _id: req.params.id, userId: req.user.id });
+
+        if (!deletedTrip) {
+            return res.status(404).json({ message: 'Trip not found or unauthorized' });
+        }
+
+        res.status(200).json({ id: req.params.id, message: 'Trip successfully deleted' });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ message: 'Server Error deleting trip' });
+    }
+};
